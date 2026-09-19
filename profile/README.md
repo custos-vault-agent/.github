@@ -28,7 +28,7 @@ What is in this repo and working end to end:
 | Open positions valued through Chainlink feeds | `PriceOracle` |
 | Pause / resume / revoke by the creator | `AgentRegistry` |
 | Cross-chain deposits credited by the Aurora receiver | `AgentRegistry.creditDeposit` |
-| Nansen attestation, pulled on demand from a signing service and relayed by anyone; verifiable on-chain | `NansenModule`, `custos-attestation` |
+| Creator reputation badge from NanSigil, a wallet attestation any contract can verify; Custos binds it to the agent through its creator | `CustosCore.agentAttestation`, `nansigil-contract`, `custos-attestation/` |
 | Indexer for share price history, swaps, deposits, attestations | `custos-indexer` |
 | Marketplace frontend | `custos-web` |
 
@@ -40,7 +40,8 @@ Not in the MVP: using share tokens as collateral, and vaults that hold more than
 custos-contract/      Smart contracts
 custos-indexer/       Indexer (Monad testnet 10143, mainnet 143)
 custos-web/           Frontend
-custos-attestation/   Nansen attestation signing service
+custos-attestation/   NanSigil signing service (contract as a submodule)
+nansigil-contract/    NanSigil contract, consumed by custos-contract as a submodule
 ```
 
 ## Architecture
@@ -60,7 +61,7 @@ flowchart LR
         Core[CustosCore proxy]
         Factory[VaultFactory]
         Oracle[PriceOracle]
-        NansenMod[NansenModule proxy]
+        Sigil[NanSigil proxy]
         Vault[AgentVault x N]
         Adapter[KuruMarketAdapter]
         Kuru[Kuru orderbook]
@@ -77,7 +78,7 @@ flowchart LR
     Runner --> Vault
     Attestor --> Nansen
     Web -.pull signed payload.-> Attestor
-    Web -.relay.-> NansenMod
+    Web -.relay.-> Sigil
     Aurora --> Receiver --> Core
 
     Core --> Factory --> Vault
@@ -85,7 +86,7 @@ flowchart LR
     Vault --> Adapter --> Kuru
     Vault --> Yield
     Vault --> Oracle --> Feed
-    NansenMod -.getAgent.-> Core
+    Core -.latest of creator.-> Sigil
 ```
 
 The registry and the vaults are deliberately separate contracts. `CustosCore` is a UUPS proxy that holds agent records and admin settings and can be upgraded. Each `AgentVault` is a plain immutable contract; upgrading the core never changes the rules a subscriber already deposited under. `VaultFactory` is its own contract because `AgentVault`'s bytecode would otherwise be embedded in the core and push it over the 24 KB limit.
@@ -176,4 +177,6 @@ A subscriber on another chain deposits through Aurora Intents. The Aurora receiv
 
 ### Nansen attestation
 
-Attestations are pulled, not pushed, in the same way as Pyth Hermes or Chainlink Data Streams. A client asks the attestation service for the creator's wallet; the service looks the wallet up on Nansen (label, PnL, win rate), signs `keccak256(wallet, label, pnl, winRate, timestamp)` with the attestor key and returns the payload. Whoever holds the payload, usually the frontend at registration, relays it to `NansenModule.submitAttestation`. The contract recomputes the hash, checks the signature against the attestor address, requires the signed wallet to be that agent's creator, and refuses any payload not newer than the one it already stores. The plaintext is emitted in the event, so the indexer can serve it and anyone can call `verifyAttestation` without trusting the frontend or the service.
+The badge comes from NanSigil, a separate product with its own contract and signing service. Attestations are pulled, not pushed, in the same way as Pyth Hermes or Chainlink Data Streams: a client asks the service for the creator's wallet, the service looks it up on Nansen (label, PnL, win rate), signs `keccak256(wallet, label, pnl, winRate, timestamp)` with the attestor key and returns the payload, and whoever holds it, usually the frontend at registration, relays it to the `NanSigil` contract. That contract checks the signature against the attestor address and keeps only the newest payload per wallet.
+
+Custos never stores attestations itself. `CustosCore.agentAttestation(id)` reads `NanSigil.latest(creator)` for the agent's creator wallet, so one attestation covers every agent that wallet registers. The plaintext is emitted in NanSigil's event, the indexer serves it, and anyone can call `NanSigil.verify` without trusting the frontend or the service.
