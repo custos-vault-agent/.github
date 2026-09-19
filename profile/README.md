@@ -34,16 +34,6 @@ What is in this repo and working end to end:
 
 Not in the MVP: using share tokens as collateral, and vaults that hold more than one base asset at a time.
 
-## Repository layout
-
-```
-custos-contract/      Smart contracts
-custos-indexer/       Indexer (Monad testnet 10143, mainnet 143)
-custos-web/           Frontend
-custos-attestation/   NanSigil signing service (contract as a submodule)
-nansigil-contract/    NanSigil contract, consumed by custos-contract as a submodule
-```
-
 ## Architecture
 
 ```mermaid
