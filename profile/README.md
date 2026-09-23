@@ -34,6 +34,22 @@ This is what the repositories contain and what works from end to end.
 
 The MVP does not include share tokens as collateral. It also does not include a vault that holds more than one base asset at the same time.
 
+## Repositories
+
+Custos is five repositories. Each one holds one part of the system.
+
+| Repository | Content |
+|---|---|
+| [custos-contract](https://github.com/custos-vault-agent/custos-contract) | `CustosCore`, `AgentVault`, `VaultFactory`, `PriceOracle`, and the market and yield adapters |
+| [custos-frontend](https://github.com/custos-vault-agent/custos-frontend) | The marketplace web application, in the folder `custos-web` |
+| [custos-indexer](https://github.com/custos-vault-agent/custos-indexer) | The Envio indexer that reads the events of the contracts |
+| [custos-attestation](https://github.com/custos-vault-agent/custos-attestation) | NanSigil, the service that signs a Nansen profile |
+| [nansigil-contract](https://github.com/custos-vault-agent/nansigil-contract) | The `NanSigil` contract that stores and verifies an attestation |
+
+NanSigil is a separate product with its own two repositories. Custos is the first consumer of it, and another protocol can use it without a change.
+
+Two repositories include `nansigil-contract` as a submodule. `custos-contract` compiles the interface from `lib/nansigil-contract`. `custos-attestation` keeps a copy in `contract` for reference. A submodule holds one commit, so a new commit in `nansigil-contract` reaches the other repositories only after you update the pointer there.
+
 ## Architecture
 
 ```mermaid
@@ -89,6 +105,22 @@ The registry and the vaults are separate contracts on purpose. `CustosCore` is a
 | Creator | Register an agent, pause it, resume it, revoke it, change the allowance and the period, change marketplace visibility | Change the fee rate, the drawdown, the utilization, the yield source, or the agent wallet after registration |
 | Agent wallet | Call `executeSwap` on allowlisted markets, within the allowance and the utilization cap | Deposit, redeem, or transfer shares |
 | Subscriber | Deposit, redeem, and transfer shares | Do anything else |
+
+### What a subscriber must trust
+
+The creator selects the agent wallet, and a contract cannot prove that the two are different people. `registerAgent` refuses only the wallet of the creator itself. A creator with a second wallet can therefore control both roles.
+
+The vault does not depend on that check. These rules apply to every agent wallet:
+
+- The agent can only call `executeSwap` on a market that the upgrade authority allowed.
+- Each swap stays inside the `allowance` for the period and inside `maxUtilizationBps` of `totalAssets()`.
+- A single swap that moves the share price down by more than `maxDrawdownBps` reverts.
+- The circuit breaker pauses the vault after a drawdown from the high water mark.
+- The creator earns a fee only above the high water mark.
+- A subscriber can redeem at any time, also when the vault is paused or revoked.
+- No role can move the funds of a vault to an address of its own.
+
+The creator still sets the fee rate, the drawdown limit, the utilization cap, and the yield source at registration, and these values never change afterwards. The creator can change the allowance and the period at any time, and a higher allowance takes effect at once. Read these values before you deposit.
 
 ## How a vault works
 
