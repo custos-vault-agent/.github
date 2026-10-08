@@ -27,7 +27,7 @@ This is what the repositories contain and what works from end to end.
 | Circuit breaker that pauses the vault after a drawdown of more than `maxDrawdownBps` | `AgentVault._checkCircuitBreaker` |
 | Open positions valued with Chainlink feeds | `PriceOracle` |
 | Pause, resume, and revoke by the creator | `AgentRegistry` |
-| Cross-chain deposits through Aurora Intents, which arrive as ordinary vault deposits | `custos-web`, `AgentVault.deposit` |
+| Cross-chain deposits through Aurora Intents, which arrive as ordinary vault deposits. The code is complete, but the feature is off because Aurora has no route into Monad yet (see Cross-chain deposits) | `custos-web`, `AgentVault.deposit` |
 | Creator reputation badge from NanSigil, a wallet attestation that any contract can verify | `CustosCore.agentAttestation`, `nansigil-contract`, `custos-attestation` |
 | Indexer for share price history, swaps, deposits, and attestations | `custos-indexer` |
 | Marketplace frontend | `custos-web` |
@@ -36,7 +36,7 @@ The MVP does not include share tokens as collateral. It also does not include a 
 
 ## Repositories
 
-Custos is five repositories. Each one holds one part of the system.
+Custos is six repositories. Each one holds one part of the system.
 
 | Repository | Content |
 |---|---|
@@ -45,6 +45,7 @@ Custos is five repositories. Each one holds one part of the system.
 | [custos-indexer](https://github.com/custos-vault-agent/custos-indexer) | The Envio indexer that reads the events of the contracts |
 | [custos-attestation](https://github.com/custos-vault-agent/custos-attestation) | NanSigil, the service that signs a Nansen profile |
 | [nansigil-contract](https://github.com/custos-vault-agent/nansigil-contract) | The `NanSigil` contract that stores and verifies an attestation |
+| `custos-agent` | A mock trading agent on Bun. It calls `AgentVault.executeSwap` on a schedule, so a testnet vault shows activity. It has no public URL yet |
 
 NanSigil is a separate product with its own two repositories. Custos is the first consumer of it, and another protocol can use it without a change.
 
@@ -198,7 +199,7 @@ After each swap the vault compares the share price with `highWaterMark * (10000 
 
 A subscriber on another chain deposits through Aurora Intents Connect. The frontend asks Aurora for a quote. The subscriber signs one intent and sends USDC on the chain of the subscriber. Aurora moves the USDC to an intermediary account that the subscriber owns on Monad. Aurora then makes two calls from that account: `approve(vault, amount)` and `deposit(amount, user)`.
 
-The vault cannot tell this apart from a local deposit. Custos therefore needs no receiver contract, and it trusts no extra address. Aurora is available on mainnet only. Until the contracts are on Monad mainnet, the frontend keeps the integration off and shows Monad as the only source chain.
+The vault cannot tell this apart from a local deposit. Custos therefore needs no receiver contract, and it trusts no extra address. This does not work today. Aurora's quote service has no route into or out of Monad. Dry quotes with a real API key answered "Quoting for this pair is not available" for USDC from every EVM origin into Monad USDC, for USDC into Monad USDT0 and MON, and for Monad assets out to Base. A control pair, USDC on Arbitrum to USDC on Base, quoted fine. The asset ids are correct and listed on both Aurora endpoints, so the pairs have no liquidity. `VITE_AURORA_ENABLED` stays `false` and the frontend shows Monad as the only source chain until Aurora opens Monad.
 
 ### Nansen attestation
 
